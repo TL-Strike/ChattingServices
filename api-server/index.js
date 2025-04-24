@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const { io } = require('socket.io-client');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -15,6 +17,12 @@ const socket = io('http://localhost:5000/api');
 
 const users = new Map();
 const groups = new Map();
+const uploadsDir = path.join(__dirname, 'uploads');
+
+// Tạo thư mục uploads nếu chưa tồn tại
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -61,7 +69,7 @@ app.post('/register', async (req, res) => {
     online: false,
     friends: [],
     pendingFriendRequests: [],
-    pendingGroupInvites: [], // Thêm danh sách lời mời nhóm
+    pendingGroupInvites: [],
   });
 
   const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
@@ -98,7 +106,7 @@ app.post('/login', async (req, res) => {
     fullName: user.fullName,
     token,
     pendingFriendRequests: user.pendingFriendRequests,
-    pendingGroupInvites: user.pendingGroupInvites, // Trả về danh sách lời mời nhóm
+    pendingGroupInvites: user.pendingGroupInvites,
   });
 });
 
@@ -295,7 +303,6 @@ app.post('/groups/invite', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Người dùng đã ở trong nhóm' });
   }
 
-  // Lưu lời mời vào pendingGroupInvites
   const inviteExists = toUser.pendingGroupInvites.some(
     invite => invite.groupId === groupId && invite.from === fromUser.username
   );
@@ -327,7 +334,6 @@ app.post('/groups/invite/accept', authenticateToken, (req, res) => {
     socket.emit('group-member-update', { groupId, fullName: user.fullName, action: 'joined' });
   }
 
-  // Xóa lời mời sau khi chấp nhận
   user.pendingGroupInvites = user.pendingGroupInvites.filter(invite => invite.groupId !== groupId);
 
   res.json({ message: 'Đã tham gia nhóm', groupId });
@@ -337,7 +343,6 @@ app.post('/groups/invite/reject', authenticateToken, (req, res) => {
   const { groupId } = req.body;
   const user = users.get(req.userId);
 
-  // Xóa lời mời sau khi từ chối
   user.pendingGroupInvites = user.pendingGroupInvites.filter(invite => invite.groupId !== groupId);
 
   res.json({ message: 'Đã từ chối lời mời', groupId });
@@ -377,7 +382,6 @@ app.delete('/groups/:groupId', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'Bạn không phải là người tạo nhóm' });
   }
 
-  // Xóa lời mời liên quan đến nhóm
   users.forEach(user => {
     user.pendingGroupInvites = user.pendingGroupInvites.filter(invite => invite.groupId !== groupId);
   });
@@ -387,6 +391,36 @@ app.delete('/groups/:groupId', authenticateToken, (req, res) => {
 
   res.json({ message: 'Nhóm đã bị xóa', groupId });
 });
+
+app.post('/upload-file', authenticateToken, (req, res) => {
+  const { fileData, fileName } = req.body;
+
+  if (!fileData || !fileName) {
+    return res.status(400).json({ error: 'Dữ liệu file không hợp lệ' });
+  }
+
+  // Chuyển base64 thành buffer
+  const base64Data = fileData.replace(/^data:.*?;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Tạo tên file duy nhất
+  const uniqueFileName = `${uuidv4()}_${fileName}`;
+  const filePath = path.join(uploadsDir, uniqueFileName);
+
+  // Lưu file vào thư mục uploads
+  fs.writeFile(filePath, buffer, (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Không thể lưu file' });
+    }
+
+    // Trả về URL của file
+    const fileUrl = `http://localhost:5001/uploads/${uniqueFileName}`;
+    res.json({ fileUrl });
+  });
+});
+
+// Cung cấp file để tải về
+app.use('/uploads', express.static(uploadsDir));
 
 app.post('/logout', authenticateToken, (req, res) => {
   const user = users.get(req.userId);

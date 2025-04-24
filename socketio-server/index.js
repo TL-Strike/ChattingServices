@@ -63,7 +63,7 @@ chatNamespace.on('connection', (socket) => {
     });
   });
 
-  socket.on('private-message', ({ to, message }) => {
+  socket.on('private-message', ({ to, message, file }) => {
     const fromUser = users.get(socket.id);
     if (!fromUser) return;
 
@@ -76,17 +76,19 @@ chatNamespace.on('connection', (socket) => {
     toUser.socket.emit('private-message', {
       from: fromUser.username,
       message,
+      file,
       to: toUser.username,
     });
 
     socket.emit('private-message', {
       from: fromUser.username,
       message,
+      file,
       to: toUser.username,
     });
   });
 
-  socket.on('group-message', ({ groupId, message }) => {
+  socket.on('group-message', ({ groupId, message, file }) => {
     const fromUser = users.get(socket.id);
     if (!fromUser) return;
 
@@ -98,6 +100,7 @@ chatNamespace.on('connection', (socket) => {
     chatNamespace.to(groupId).emit('group-message', {
       from: fromUser.username,
       message,
+      file,
       groupId,
     });
   });

@@ -25,6 +25,7 @@ class Chat extends Component {
     notification: '',
     confirmAction: null,
     removedGroups: [],
+    selectedFile: null,
   };
 
   socket = null;
@@ -135,7 +136,7 @@ class Chat extends Component {
       });
     });
 
-    this.socket.on('private-message', ({ from, message, to }) => {
+    this.socket.on('private-message', ({ from, message, to, file }) => {
       const recipient = from === this.props.username ? to : from;
       this.setState(
         (prevState) => ({
@@ -143,7 +144,7 @@ class Chat extends Component {
             ...prevState.messages,
             [recipient]: [
               ...(prevState.messages[recipient] || []),
-              { from, message, type: 'private' },
+              { from, message, file, type: 'private' },
             ],
           },
         }),
@@ -151,14 +152,14 @@ class Chat extends Component {
       );
     });
 
-    this.socket.on('group-message', ({ from, message, groupId }) => {
+    this.socket.on('group-message', ({ from, message, groupId, file }) => {
       this.setState(
         (prevState) => ({
           messages: {
             ...prevState.messages,
             [groupId]: [
               ...(prevState.messages[groupId] || []),
-              { from, message, type: 'group', groupId },
+              { from, message, file, type: 'group', groupId },
             ],
           },
         }),
@@ -306,6 +307,62 @@ class Chat extends Component {
     if (e.key === 'Enter') {
       this.handleSendMessage(e);
     }
+  };
+
+  handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'mp4', 'pdf', 'doc', 'docx', 'xlsx'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      this.showNotification('Định dạng file không được hỗ trợ. Chỉ hỗ trợ: ' + allowedExtensions.join(', '));
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      this.showNotification('Kích thước file vượt quá 10MB. Vui lòng chọn file nhỏ hơn.');
+      return;
+    }
+
+    this.setState({ selectedFile: file });
+    this.handleSendFile(file);
+  };
+
+  handleSendFile = async (file) => {
+    const { selectedRecipient, selectedType } = this.state;
+    if (!selectedRecipient) {
+      this.showNotification('Vui lòng chọn người nhận hoặc nhóm để gửi file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const fileData = reader.result;
+      const fileName = file.name;
+
+      try {
+        const response = await axios.post(
+          'http://localhost:5001/upload-file',
+          { fileData, fileName },
+          { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+        );
+
+        const fileUrl = response.data.fileUrl;
+
+        if (selectedType === 'group') {
+          this.socket.emit('group-message', { groupId: selectedRecipient, message: '', file: { url: fileUrl, name: fileName } });
+        } else if (selectedType === 'private') {
+          this.socket.emit('private-message', { to: selectedRecipient, message: '', file: { url: fileUrl, name: fileName } });
+        }
+
+        this.setState({ selectedFile: null });
+      } catch (err) {
+        this.showNotification('Không thể gửi file: ' + (err.response?.data?.error || err.message));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   handleSearchInputChange = async (e) => {
@@ -609,7 +666,7 @@ class Chat extends Component {
             <ul className="suggestions-list">
               {searchSuggestions.map((user, index) => (
                 <li key={index}>
-                  {user.fullName} {/* Xóa phần hiển thị username */}
+                  {user.fullName}
                   {friends.includes(user.username) ? (
                     <span className="friend-label">Bạn bè</span>
                   ) : (
@@ -768,7 +825,7 @@ class Chat extends Component {
                 <ul className="suggestions-list">
                   {groupSearchSuggestions.map((friend, index) => (
                     <li key={index}>
-                      {friend.fullName} - {friend.phoneNumber} {/* Đổi format thành "fullName - phonenumber" */}
+                      {friend.fullName} - {friend.phoneNumber}
                       <button
                         onClick={() => this.handleInviteToGroup(friend.username, selectedRecipient)}
                       >
@@ -793,13 +850,43 @@ class Chat extends Component {
                   </div>
                 );
               }
+
+              const isImage = msg.file && ['png', 'jpg', 'jpeg', 'gif'].includes(msg.file.name.split('.').pop().toLowerCase());
+              const isVideo = msg.file && msg.file.name.toLowerCase().endsWith('mp4');
+              const isOtherFile = msg.file && ['pdf', 'doc', 'docx', 'xlsx'].includes(msg.file.name.split('.').pop().toLowerCase());
+              const isSender = msg.from === this.props.username;
+
               return (
                 <div
                   key={index}
-                  className={`message ${msg.from === this.props.username ? 'sent' : 'received'}`}
+                  className={`message ${isSender ? 'sent' : 'received'} ${isImage || isVideo ? 'media-message' : ''}`}
                 >
-                  {selectedType === 'group' && <strong>{sender ? sender.fullName : msg.from}: </strong>}
-                  {msg.message}
+                  {selectedType === 'group' && (
+                    <strong className={isSender && (isImage || isVideo) ? 'sender-name' : ''}>
+                      {sender ? sender.fullName : msg.from}: 
+                    </strong>
+                  )}
+                  {msg.message && <div>{msg.message}</div>}
+                  {isImage && (
+                    <div className="media-container">
+                      <img src={msg.file.url} alt={msg.file.name} className="media-file" />
+                    </div>
+                  )}
+                  {isVideo && (
+                    <div className="media-container">
+                      <video controls className="media-file">
+                        <source src={msg.file.url} type="video/mp4" />
+                        Trình duyệt của bạn không hỗ trợ thẻ video.
+                      </video>
+                    </div>
+                  )}
+                  {isOtherFile && (
+                    <div className="file-container">
+                      <a href={msg.file.url} download={msg.file.name} className="file-link">
+                        📎 {msg.file.name}
+                      </a>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -812,6 +899,15 @@ class Chat extends Component {
               onChange={(e) => this.setState({ message: e.target.value })}
               onKeyPress={this.handleKeyPress}
             />
+            <label className="file-upload-button">
+              <span>📎</span>
+              <input
+                type="file"
+                onChange={this.handleFileChange}
+                accept=".png,.jpg,.jpeg,.gif,.mp4,.pdf,.doc,.docx,.xlsx"
+                style={{ display: 'none' }}
+              />
+            </label>
             <button onClick={this.handleSendMessage}>Gửi</button>
           </div>
         </div>
