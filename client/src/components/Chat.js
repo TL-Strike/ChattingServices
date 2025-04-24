@@ -26,6 +26,7 @@ class Chat extends Component {
     confirmAction: null,
     removedGroups: [],
     selectedFile: null,
+    unreadMessages: {}, // Thêm state để theo dõi tin nhắn chưa đọc
   };
 
   socket = null;
@@ -128,7 +129,9 @@ class Chat extends Component {
 
     this.socket.on('group-invite', ({ groupId, groupName, from }) => {
       this.setState((prevState) => {
-        const inviteExists = prevState.groupInvites.some(invite => invite.groupId === groupId && invite.from === from);
+        const inviteExists = prevState.groupvať
+
+Invites.some(invite => invite.groupId === groupId && invite.from === from);
         if (inviteExists) return prevState;
         return {
           groupInvites: [...prevState.groupInvites, { groupId, groupName, from }],
@@ -139,30 +142,48 @@ class Chat extends Component {
     this.socket.on('private-message', ({ from, message, to, file }) => {
       const recipient = from === this.props.username ? to : from;
       this.setState(
-        (prevState) => ({
-          messages: {
-            ...prevState.messages,
-            [recipient]: [
-              ...(prevState.messages[recipient] || []),
-              { from, message, file, type: 'private' },
-            ],
-          },
-        }),
+        (prevState) => {
+          const isViewing = prevState.selectedRecipient === recipient && prevState.selectedType === 'private';
+          const newUnreadMessages = { ...prevState.unreadMessages };
+          if (!isViewing) {
+            newUnreadMessages[recipient] = (newUnreadMessages[recipient] || 0) + 1;
+          }
+
+          return {
+            messages: {
+              ...prevState.messages,
+              [recipient]: [
+                ...(prevState.messages[recipient] || []),
+                { from, message, file, type: 'private' },
+              ],
+            },
+            unreadMessages: newUnreadMessages,
+          };
+        },
         () => this.scrollToBottom()
       );
     });
 
     this.socket.on('group-message', ({ from, message, groupId, file }) => {
       this.setState(
-        (prevState) => ({
-          messages: {
-            ...prevState.messages,
-            [groupId]: [
-              ...(prevState.messages[groupId] || []),
-              { from, message, file, type: 'group', groupId },
-            ],
-          },
-        }),
+        (prevState) => {
+          const isViewing = prevState.selectedRecipient === groupId && prevState.selectedType === 'group';
+          const newUnreadMessages = { ...prevState.unreadMessages };
+          if (!isViewing) {
+            newUnreadMessages[groupId] = (newUnreadMessages[groupId] || 0) + 1;
+          }
+
+          return {
+            messages: {
+              ...prevState.messages,
+              [groupId]: [
+                ...(prevState.messages[groupId] || []),
+                { from, message, file, type: 'group', groupId },
+              ],
+            },
+            unreadMessages: newUnreadMessages,
+          };
+        },
         () => this.scrollToBottom()
       );
     });
@@ -188,8 +209,10 @@ class Chat extends Component {
         this.setState(
           (prevState) => {
             const { [groupId]: _, ...restMessages } = prevState.messages;
+            const { [groupId]: __, ...restUnreadMessages } = prevState.unreadMessages;
             return {
               messages: restMessages,
+              unreadMessages: restUnreadMessages,
               groups: prevState.groups.filter(group => group.groupId !== groupId),
               selectedRecipient: prevState.selectedRecipient === groupId ? '' : prevState.selectedRecipient,
               selectedType: prevState.selectedRecipient === groupId ? '' : prevState.selectedType,
@@ -205,8 +228,10 @@ class Chat extends Component {
       this.setState(
         (prevState) => {
           const { [groupId]: _, ...restMessages } = prevState.messages;
+          const { [groupId]: __, ...restUnreadMessages } = prevState.unreadMessages;
           return {
             messages: restMessages,
+            unreadMessages: restUnreadMessages,
             groups: prevState.groups.filter(group => group.groupId !== groupId),
             creatorGroups: prevState.creatorGroups.filter(g => g !== groupId),
             selectedRecipient: prevState.selectedRecipient === groupId ? '' : prevState.selectedRecipient,
@@ -519,11 +544,15 @@ class Chat extends Component {
   };
 
   handleJoinGroup = async (groupId, groupName) => {
-    this.setState({
+    this.setState((prevState) => ({
       selectedRecipient: groupId,
       selectedType: 'group',
       showGroupInviteForm: false,
-    });
+      unreadMessages: {
+        ...prevState.unreadMessages,
+        [groupId]: 0, // Reset số tin nhắn chưa đọc khi xem nhóm
+      },
+    }));
 
     this.socket.emit('join-group', { groupId, groupName, username: this.props.username });
 
@@ -538,6 +567,18 @@ class Chat extends Component {
         this.showNotification(err.response?.data?.error || 'Không thể tham gia nhóm');
       }
     }
+  };
+
+  handleSelectFriend = (username) => {
+    this.setState((prevState) => ({
+      selectedRecipient: username,
+      selectedType: 'private',
+      showGroupInviteForm: false,
+      unreadMessages: {
+        ...prevState.unreadMessages,
+        [username]: 0, // Reset số tin nhắn chưa đọc khi xem bạn bè
+      },
+    }));
   };
 
   handleLeaveGroup = () => {
@@ -623,6 +664,7 @@ class Chat extends Component {
       showGroupInput,
       notification,
       confirmAction,
+      unreadMessages,
     } = this.state;
 
     const isCreator = selectedType === 'group' && creatorGroups.includes(selectedRecipient);
@@ -752,40 +794,40 @@ class Chat extends Component {
           <ul>
             {users
               .filter((user) => friends.includes(user.username) && user.username !== this.props.username)
-              .map((user) => (
-                <li
-                  key={user.username}
-                  className={
-                    selectedRecipient === user.username && selectedType === 'private' ? 'active' : ''
-                  }
-                  onClick={() =>
-                    this.setState({
-                      selectedRecipient: user.username,
-                      selectedType: 'private',
-                      showGroupInviteForm: false,
-                    })
-                  }
-                >
-                  <span
-                    className="status-dot"
-                    style={{ backgroundColor: user.online ? '#4CAF50' : '#B0BEC5' }}
-                  ></span>
-                  {user.fullName}
-                </li>
-              ))}
+              .map((user) => {
+                const unreadCount = unreadMessages[user.username] || 0;
+                return (
+                  <li
+                    key={user.username}
+                    className={`${selectedRecipient === user.username && selectedType === 'private' ? 'active' : ''} ${unreadCount > 0 ? 'unread' : ''}`}
+                    onClick={() => this.handleSelectFriend(user.username)}
+                  >
+                    <span
+                      className="status-dot"
+                      style={{ backgroundColor: user.online ? '#4CAF50' : '#B0BEC5' }}
+                    ></span>
+                    <span className="name">{user.fullName}</span>
+                    {unreadCount > 0 && <span className="unread-count">{unreadCount}</span>}
+                  </li>
+                );
+              })}
           </ul>
           <div className="group-section">
             <h3>Nhóm</h3>
             <ul>
-              {groups.map((group) => (
-                <li
-                  key={group.groupId}
-                  className={selectedRecipient === group.groupId && selectedType === 'group' ? 'active' : ''}
-                  onClick={() => this.handleJoinGroup(group.groupId, group.groupName)}
-                >
-                  {group.groupName}
-                </li>
-              ))}
+              {groups.map((group) => {
+                const unreadCount = unreadMessages[group.groupId] || 0;
+                return (
+                  <li
+                    key={group.groupId}
+                    className={`${selectedRecipient === group.groupId && selectedType === 'group' ? 'active' : ''} ${unreadCount > 0 ? 'unread' : ''}`}
+                    onClick={() => this.handleJoinGroup(group.groupId, group.groupName)}
+                  >
+                    <span className="name">{group.groupName}</span>
+                    {unreadCount > 0 && <span className="unread-count">{unreadCount}</span>}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
