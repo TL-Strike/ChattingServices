@@ -1,19 +1,19 @@
 {
   "name": "chat-app-client",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Client for chat application",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-scripts start"
+  },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "socket.io-client": "^4.7.5"
+    "socket.io-client": "^4.5.0",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
-    "react-scripts": "5.0.1",
-    "sass": "^1.69.5"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+    "react-scripts": "5.0.1"
   },
   "browserslist": {
     "production": [

@@ -16,11 +16,28 @@
         flex-direction: column;
         gap: 1rem;
 
+        .error {
+            color: #f44336;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .success {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin: 0;
+            text-align: center;
+        }
+
         input {
             padding: 0.5rem;
             border: 1px solid #2196f3;
             border-radius: 4px;
             outline: none;
+            font-size: 1rem;
         }
 
         button {
@@ -31,6 +48,7 @@
             border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.3s;
+            font-size: 1rem;
 
             &:hover {
                 background-color: #1976d2;
@@ -41,6 +59,7 @@
             color: #2196f3;
             cursor: pointer;
             margin-top: 1rem;
+            font-size: 0.9rem;
 
             span {
                 text-decoration: underline;

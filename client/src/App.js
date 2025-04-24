@@ -1,50 +1,55 @@
 import React, { Component } from 'react';
+import Chat from './components/Chat';
 import Login from './components/Login';
 import Register from './components/Register';
-import Chat from './components/Chat';
 import './App.scss';
 
 class App extends Component {
   state = {
-    currentScreen: 'login',
-    username: '',
-    password: '',
-    phoneNumber: '',
+    view: 'login', // Điều khiển giao diện: 'login', 'register', hoặc 'chat'
+    user: null, // Lưu thông tin người dùng sau khi đăng nhập/đăng ký thành công
   };
 
-  handleRegister = (username, password, phoneNumber) => {
-    console.log('Registering:', { username, password, phoneNumber }); // Thêm log
-    this.setState({ username, password, phoneNumber, currentScreen: 'chat' });
+  handleLoginSuccess = (user) => {
+    this.setState({ user, view: 'chat' });
   };
 
-  handleLogin = (username, password) => {
-    console.log('Logging in:', { username, password }); // Thêm log
-    this.setState({ username, password, currentScreen: 'chat' });
+  handleRegisterSuccess = (user) => {
+    this.setState({ user, view: 'chat' });
   };
 
-  handleBackToLogin = () => {
-    this.setState({ currentScreen: 'login' });
+  switchToRegister = () => {
+    this.setState({ view: 'register' });
+  };
+
+  switchToLogin = () => {
+    this.setState({ view: 'login' });
   };
 
   render() {
-    const { currentScreen, username, phoneNumber } = this.state;
+    const { view, user } = this.state;
 
     return (
       <div className="app">
-        {currentScreen === 'login' && (
+        {view === 'login' && (
           <Login
-            onLogin={this.handleLogin}
-            onSwitchToRegister={() => this.setState({ currentScreen: 'register' })}
+            onLoginSuccess={this.handleLoginSuccess}
+            onSwitchToRegister={this.switchToRegister}
           />
         )}
-        {currentScreen === 'register' && (
+        {view === 'register' && (
           <Register
-            onRegister={this.handleRegister}
-            onBackToLogin={this.handleBackToLogin}
+            onRegisterSuccess={this.handleRegisterSuccess}
+            onSwitchToLogin={this.switchToLogin}
           />
         )}
-        {currentScreen === 'chat' && (
-          <Chat username={username} phoneNumber={phoneNumber} />
+        {view === 'chat' && user && (
+          <Chat
+            username={user.username}
+            phoneNumber={user.phoneNumber}
+            fullName={user.fullName}
+            userId={user.userId}
+          />
         )}
       </div>
     );

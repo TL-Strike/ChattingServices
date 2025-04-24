@@ -1,0 +1,17 @@
+{
+  "name": "chat-app-api-server",
+  "version": "1.0.0",
+  "description": "REST API server for chat app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "uuid": "^8.3.2",
+    "cors": "^2.8.5",
+    "socket.io-client": "^4.5.0"
+  }
+}

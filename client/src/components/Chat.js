@@ -1,196 +1,140 @@
 import React, { Component } from 'react';
 import io from 'socket.io-client';
+import axios from 'axios';
 import '../styles/Chat.scss';
 
 class Chat extends Component {
   state = {
-    // message: Lưu trữ nội dung tin nhắn người dùng nhập vào ô input.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "Xin chào bạn!"
     message: '',
-
-    // messages: Lưu trữ danh sách tin nhắn theo recipient (người nhận hoặc nhóm).
-    // Kiểu dữ liệu: object, với key là recipient (string) và value là mảng các tin nhắn (array of objects).
-    // Mỗi tin nhắn có các thuộc tính: { from: string, message: string, type: string, group?: string }
-    // Ví dụ: { "userA": [{ from: "userA", message: "Chào bạn", type: "private" }], "NhomHocTap": [{ from: "userB", message: "Chào nhóm", type: "group", group: "NhomHocTap" }] }
     messages: {},
-
-    // users: Lưu trữ danh sách tất cả người dùng trong hệ thống.
-    // Kiểu dữ liệu: array of objects, mỗi object có các thuộc tính: { username: string, phoneNumber: string, online: boolean }
-    // Ví dụ: [{ username: "userA", phoneNumber: "0123456789", online: true }, { username: "userB", phoneNumber: "0987654321", online: false }]
     users: [],
-
-    // groups: Lưu trữ danh sách các nhóm mà người dùng tham gia.
-    // Kiểu dữ liệu: array of objects, mỗi object có các thuộc tính: { name: string, creator: string, creatorUsername: string }
-    // Ví dụ: [{ name: "NhomHocTap", creator: "socketId1", creatorUsername: "userA" }, { name: "NhomChoiGame", creator: "socketId2", creatorUsername: "userB" }]
     groups: [],
-
-    // selectedRecipient: Lưu trữ người nhận hoặc nhóm được chọn để trò chuyện.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "userA" (khi trò chuyện riêng) hoặc "NhomHocTap" (khi trò chuyện nhóm)
     selectedRecipient: '',
-
-    // selectedType: Xác định loại trò chuyện hiện tại (riêng tư hoặc nhóm).
-    // Kiểu dữ liệu: string, chỉ nhận giá trị "private" hoặc "group"
-    // Ví dụ: "private" hoặc "group"
     selectedType: '',
-
-    // groupNameInput: Lưu trữ tên nhóm mà người dùng nhập khi tạo nhóm mới.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "NhomHocTapMoi"
     groupNameInput: '',
-
-    // searchInput: Lưu trữ giá trị người dùng nhập vào ô tìm kiếm để tìm liên hệ mới.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "userA" hoặc "0123456789"
     searchInput: '',
-
-    // searchSuggestions: Lưu trữ danh sách gợi ý tìm kiếm người dùng (dựa trên tên hoặc số điện thoại).
-    // Kiểu dữ liệu: array of objects, mỗi object có các thuộc tính: { username: string, phoneNumber: string, online: boolean }
-    // Ví dụ: [{ username: "userA", phoneNumber: "0123456789", online: true }]
     searchSuggestions: [],
-
-    // friendRequests: Lưu trữ danh sách lời mời kết bạn mà người dùng nhận được.
-    // Kiểu dữ liệu: array of strings, mỗi phần tử là tên người dùng (username) của người gửi lời mời.
-    // Ví dụ: ["userA", "userB"]
     friendRequests: [],
-
-    // friends: Lưu trữ danh sách bạn bè của người dùng.
-    // Kiểu dữ liệu: array of strings, mỗi phần tử là tên người dùng (username) của bạn bè.
-    // Ví dụ: ["userA", "userB"]
     friends: [],
-
-    // groupInvites: Lưu trữ danh sách lời mời tham gia nhóm mà người dùng nhận được.
-    // Kiểu dữ liệu: array of objects, mỗi object có các thuộc tính: { groupName: string, from: string }
-    // Ví dụ: [{ groupName: "NhomHocTap", from: "userA" }, { groupName: "NhomChoiGame", from: "userB" }]
     groupInvites: [],
-
-    // groupSearchInput: Lưu trữ giá trị người dùng nhập vào ô tìm kiếm để mời bạn bè vào nhóm.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "userA" hoặc "0123456789"
     groupSearchInput: '',
-
-    // groupSearchSuggestions: Lưu trữ danh sách gợi ý bạn bè khi tìm kiếm để mời vào nhóm.
-    // Kiểu dữ liệu: array of objects, mỗi object có các thuộc tính: { username: string, phoneNumber: string }
-    // Ví dụ: [{ username: "userA", phoneNumber: "0123456789" }]
     groupSearchSuggestions: [],
-
-    // creatorGroups: Lưu trữ danh sách tên các nhóm mà người dùng là người tạo.
-    // Kiểu dữ liệu: array of strings, mỗi phần tử là tên nhóm (groupName).
-    // Ví dụ: ["NhomHocTap", "NhomChoiGame"]
     creatorGroups: [],
-
-    // showGroupInviteForm: Điều khiển việc hiển thị/ẩn form mời bạn bè vào nhóm.
-    // Kiểu dữ liệu: boolean
-    // Ví dụ: true (hiển thị form) hoặc false (ẩn form)
     showGroupInviteForm: false,
-
-    // showGroupInput: Điều khiển việc hiển thị/ẩn input để tạo nhóm mới.
-    // Kiểu dữ liệu: boolean
-    // Ví dụ: true (hiển thị input) hoặc false (ẩn input)
     showGroupInput: false,
-
-    // notification: Lưu trữ thông báo lỗi hoặc thông tin từ server để hiển thị trên giao diện.
-    // Kiểu dữ liệu: string
-    // Ví dụ: "Người dùng không tồn tại"
     notification: '',
-
-    // confirmAction: Lưu trữ thông tin hành động xác nhận (rời nhóm hoặc xóa nhóm).
-    // Kiểu dữ liệu: object hoặc null, object có các thuộc tính: { type: string, groupName: string }
-    // Ví dụ: { type: "leave", groupName: "NhomHocTap" } hoặc null (không có hành động xác nhận)
     confirmAction: null,
-
-    // removedGroups: Lưu trữ danh sách tên các nhóm đã rời hoặc xóa để tránh hiển thị lại.
-    // Kiểu dữ liệu: array of strings, mỗi phần tử là tên nhóm (groupName).
-    // Ví dụ: ["NhomHocTap", "NhomChoiGame"]
     removedGroups: [],
   };
 
   socket = null;
   messagesEndRef = React.createRef();
 
-  componentDidMount() {
-    this.socket = io('http://localhost:5000');
-    console.log('Registering user:', this.props.username, this.props.phoneNumber);
-    // this.socket.emit('register-user', ...): Gửi thông tin đăng ký người dùng đến server.
-    // - Dữ liệu gửi đi: { username, phoneNumber }.
-    // - Server sẽ lưu thông tin người dùng và gửi lại danh sách người dùng (user-list) và nhóm (group-list).
-    this.socket.emit('register-user', {
-      username: this.props.username,
-      phoneNumber: this.props.phoneNumber,
+  async componentDidMount() {
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+      this.setState({ notification: 'Bạn cần đăng nhập để tiếp tục' });
+      return;
+    }
+
+    this.socket = io('http://localhost:5000/chat', {
+      auth: { token },
     });
 
-    // this.socket.on('user-list', ...): Lắng nghe danh sách người dùng từ server.
-    // - Dữ liệu nhận được: users (array of objects).
-    // - Cập nhật state users để hiển thị danh sách người dùng trên giao diện.
-    this.socket.on('user-list', (users) => {
-      console.log('Received user list:', users);
-      this.setState({ users });
+    try {
+      const groupsResponse = await axios.get('http://localhost:5001/groups', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      this.socket.emit('join', {
+        userId: this.props.userId,
+        username: this.props.username,
+        groups: groupsResponse.data,
+      });
+
+      this.registerSocketListeners();
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+      await this.fetchUsers();
+      await this.fetchGroups();
+      await this.fetchFriends();
+      await this.fetchFriendRequests();
+      await this.fetchGroupInvites();
+    } catch (err) {
+      this.showNotification('Không thể tải dữ liệu: ' + (err.response?.data?.error || err.message));
+    }
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    this.handleDisconnect();
+  }
+
+  handleBeforeUnload = () => {
+    this.handleDisconnect();
+  };
+
+  handleDisconnect = () => {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+  };
+
+  showNotification = (message) => {
+    this.setState({ notification: message }, () => {
+      setTimeout(() => this.setState({ notification: '' }), 3000);
+    });
+  };
+
+  registerSocketListeners = () => {
+    this.socket.on('user-status', async ({ username, online }) => {
+      this.setState((prevState) => ({
+        users: prevState.users.map(user =>
+          user.username === username ? { ...user, online } : user
+        ),
+      }));
+      await this.fetchUsers();
     });
 
-    // this.socket.on('group-list', ...): Lắng nghe danh sách nhóm từ server.
-    // - Dữ liệu nhận được: groups (array of objects).
-    // - Lọc bỏ các nhóm đã rời hoặc xóa (dựa trên removedGroups).
-    // - Cập nhật state groups và creatorGroups (danh sách tên nhóm mà người dùng là creator).
-    this.socket.on('group-list', (groups) => {
-      console.log('Received group list:', groups);
-      const { removedGroups } = this.state;
-      const filteredGroups = groups.filter(group => !removedGroups.includes(group.name));
-      const creatorGroups = filteredGroups
-        .filter((group) => group.creator === this.socket.id)
-        .map((group) => group.name);
-      this.setState({ groups: filteredGroups, creatorGroups });
+    this.socket.on('new-user', (newUser) => {
+      this.setState((prevState) => {
+        const userExists = prevState.users.some(user => user.username === newUser.username);
+        if (userExists) return prevState;
+        return {
+          users: [...prevState.users, { ...newUser, online: false }],
+        };
+      });
     });
 
-    // this.socket.on('friend-request', ...): Lắng nghe lời mời kết bạn từ server.
-    // - Dữ liệu nhận được: { from } (tên người dùng của người gửi lời mời).
-    // - Thêm tên người gửi vào state friendRequests để hiển thị trên giao diện.
     this.socket.on('friend-request', ({ from }) => {
-      this.setState((prevState) => ({
-        friendRequests: [...prevState.friendRequests, from],
-      }));
+      this.setState((prevState) => {
+        if (prevState.friendRequests.includes(from)) return prevState;
+        return {
+          friendRequests: [...prevState.friendRequests, from],
+        };
+      });
     });
 
-    // this.socket.on('friend-request-rejected', ...): Lắng nghe thông báo từ chối lời mời kết bạn.
-    // - Dữ liệu nhận được: fromUsername (tên người dùng từ chối lời mời).
-    // - Xóa lời mời tương ứng khỏi state friendRequests.
-    this.socket.on('friend-request-rejected', (fromUsername) => {
-      this.setState((prevState) => ({
-        friendRequests: prevState.friendRequests.filter((req) => req !== fromUsername),
-      }));
+    this.socket.on('friend-accepted', async ({ friend }) => {
+      this.setState((prevState) => {
+        if (prevState.friends.includes(friend)) return prevState;
+        return {
+          friends: [...prevState.friends, friend],
+        };
+      });
+      await this.fetchFriends();
+      await this.fetchUsers();
+      this.socket.emit('request-user-status', { username: this.props.username, friend });
     });
 
-    // this.socket.on('friend-added', ...): Lắng nghe thông báo khi một người dùng được thêm vào danh sách bạn bè.
-    // - Dữ liệu nhận được: friend (tên người dùng của bạn bè mới).
-    // - Thêm bạn bè mới vào state friends để hiển thị trên giao diện.
-    this.socket.on('friend-added', (friend) => {
-      this.setState((prevState) => ({
-        friends: [...prevState.friends, friend],
-      }));
+    this.socket.on('group-invite', ({ groupId, groupName, from }) => {
+      this.setState((prevState) => {
+        const inviteExists = prevState.groupInvites.some(invite => invite.groupId === groupId && invite.from === from);
+        if (inviteExists) return prevState;
+        return {
+          groupInvites: [...prevState.groupInvites, { groupId, groupName, from }],
+        };
+      });
     });
 
-    // this.socket.on('group-invite', ...): Lắng nghe lời mời tham gia nhóm từ server.
-    // - Dữ liệu nhận được: { groupName, from } (tên nhóm và tên người mời).
-    // - Thêm lời mời vào state groupInvites để hiển thị trên giao diện.
-    this.socket.on('group-invite', ({ groupName, from }) => {
-      this.setState((prevState) => ({
-        groupInvites: [...prevState.groupInvites, { groupName, from }],
-      }));
-    });
-
-    // this.socket.on('group-invite-rejected', ...): Lắng nghe thông báo từ chối lời mời tham gia nhóm.
-    // - Dữ liệu nhận được: groupName (tên nhóm bị từ chối).
-    // - Xóa lời mời tương ứng khỏi state groupInvites.
-    this.socket.on('group-invite-rejected', (groupName) => {
-      this.setState((prevState) => ({
-        groupInvites: prevState.groupInvites.filter((invite) => invite.groupName !== groupName),
-      }));
-    });
-
-    // this.socket.on('private-message', ...): Lắng nghe tin nhắn riêng tư từ server.
-    // - Dữ liệu nhận được: { from, message, to } (người gửi, nội dung tin nhắn, người nhận).
-    // - Xác định recipient (người gửi hoặc người nhận, tùy vào username hiện tại).
-    // - Thêm tin nhắn vào state messages theo recipient, sau đó cuộn xuống cuối danh sách tin nhắn.
     this.socket.on('private-message', ({ from, message, to }) => {
       const recipient = from === this.props.username ? to : from;
       this.setState(
@@ -203,100 +147,81 @@ class Chat extends Component {
             ],
           },
         }),
-        () => {
-          this.scrollToBottom();
-        }
+        () => this.scrollToBottom()
       );
     });
 
-    // this.socket.on('group-message', ...): Lắng nghe tin nhắn nhóm từ server.
-    // - Dữ liệu nhận được: { from, message, group } (người gửi, nội dung tin nhắn, tên nhóm).
-    // - Thêm tin nhắn vào state messages theo tên nhóm, sau đó cuộn xuống cuối danh sách tin nhắn.
-    this.socket.on('group-message', ({ from, message, group }) => {
+    this.socket.on('group-message', ({ from, message, groupId }) => {
       this.setState(
         (prevState) => ({
-        messages: {
-          ...prevState.messages,
-          [group]: [
-            ...(prevState.messages[group] || []),
-            { from, message, type: 'group', group },
-          ],
-        },
-      }),
-        () => {
-          this.scrollToBottom();
-        }
+          messages: {
+            ...prevState.messages,
+            [groupId]: [
+              ...(prevState.messages[groupId] || []),
+              { from, message, type: 'group', groupId },
+            ],
+          },
+        }),
+        () => this.scrollToBottom()
       );
     });
 
-    // this.socket.on('group-created', ...): Lắng nghe thông báo nhóm được tạo thành công.
-    // - Dữ liệu nhận được: groupName (tên nhóm vừa tạo).
-    // - Xóa nội dung ô nhập tên nhóm (groupNameInput) và ẩn form tạo nhóm (showGroupInput).
-    this.socket.on('group-created', (groupName) => {
-      this.setState({ groupNameInput: '', showGroupInput: false });
+    this.socket.on('group-member-update', ({ groupId, fullName, action }) => {
+      const message = action === 'joined' 
+        ? `${fullName} đã tham gia nhóm` 
+        : `${fullName} đã rời nhóm`;
+      this.setState(
+        (prevState) => ({
+          messages: {
+            ...prevState.messages,
+            [groupId]: [
+              ...(prevState.messages[groupId] || []),
+              { message, type: 'system', groupId },
+            ],
+          },
+        }),
+        () => this.scrollToBottom()
+      );
+
+      if (action === 'left' && fullName === this.props.fullName) {
+        this.setState(
+          (prevState) => {
+            const { [groupId]: _, ...restMessages } = prevState.messages;
+            return {
+              messages: restMessages,
+              groups: prevState.groups.filter(group => group.groupId !== groupId),
+              selectedRecipient: prevState.selectedRecipient === groupId ? '' : prevState.selectedRecipient,
+              selectedType: prevState.selectedRecipient === groupId ? '' : prevState.selectedType,
+              removedGroups: [...prevState.removedGroups, groupId],
+            };
+          },
+          () => this.showNotification('Bạn đã rời nhóm')
+        );
+      }
     });
 
-    // this.socket.on('group-joined', ...): Lắng nghe thông báo tham gia nhóm thành công.
-    // - Dữ liệu nhận được: groupName (tên nhóm vừa tham gia).
-    // - Xóa nội dung ô nhập tên nhóm (groupNameInput) nếu có.
-    this.socket.on('group-joined', (groupName) => {
-      this.setState({ groupNameInput: '' });
+    this.socket.on('group-deleted', ({ groupId }) => {
+      this.setState(
+        (prevState) => {
+          const { [groupId]: _, ...restMessages } = prevState.messages;
+          return {
+            messages: restMessages,
+            groups: prevState.groups.filter(group => group.groupId !== groupId),
+            creatorGroups: prevState.creatorGroups.filter(g => g !== groupId),
+            selectedRecipient: prevState.selectedRecipient === groupId ? '' : prevState.selectedRecipient,
+            selectedType: prevState.selectedRecipient === groupId ? '' : prevState.selectedType,
+            groupInvites: prevState.groupInvites.filter(invite => invite.groupId !== groupId),
+            removedGroups: [...prevState.removedGroups, groupId],
+          };
+        },
+        () => this.showNotification('Nhóm đã bị xóa bởi người tạo')
+      );
     });
 
-    // this.socket.on('group-left', ...): Lắng nghe thông báo rời nhóm.
-    // - Dữ liệu nhận được: groupName (tên nhóm vừa rời).
-    // - Xóa tin nhắn của nhóm khỏi state messages.
-    // - Xóa nhóm khỏi state groups và creatorGroups.
-    // - Thêm nhóm vào state removedGroups để tránh hiển thị lại.
-    // - Nếu nhóm vừa rời đang được chọn (selectedRecipient), xóa thông tin chọn (selectedRecipient, selectedType).
-    this.socket.on('group-left', (groupName) => {
-      this.setState((prevState) => {
-        const { [groupName]: _, ...restMessages } = prevState.messages;
-        return {
-          messages: restMessages,
-          selectedRecipient: prevState.selectedRecipient === groupName ? '' : prevState.selectedRecipient,
-          selectedType: prevState.selectedRecipient === groupName ? '' : prevState.selectedType,
-          groups: prevState.groups.filter((g) => g.name !== groupName),
-          creatorGroups: prevState.creatorGroups.filter((g) => g !== groupName),
-          removedGroups: [...prevState.removedGroups, groupName],
-        };
-      });
-    });
-
-    // this.socket.on('group-deleted', ...): Lắng nghe thông báo nhóm bị xóa.
-    // - Dữ liệu nhận được: groupName (tên nhóm bị xóa).
-    // - Xóa tin nhắn của nhóm khỏi state messages.
-    // - Xóa nhóm khỏi state groups và creatorGroups.
-    // - Thêm nhóm vào state removedGroups để tránh hiển thị lại.
-    // - Nếu nhóm bị xóa đang được chọn (selectedRecipient), xóa thông tin chọn (selectedRecipient, selectedType).
-    this.socket.on('group-deleted', (groupName) => {
-      this.setState((prevState) => {
-        const { [groupName]: _, ...restMessages } = prevState.messages;
-        return {
-          messages: restMessages,
-          selectedRecipient: prevState.selectedRecipient === groupName ? '' : prevState.selectedRecipient,
-          selectedType: prevState.selectedRecipient === groupName ? '' : prevState.selectedType,
-          groups: prevState.groups.filter((g) => g.name !== groupName),
-          creatorGroups: prevState.creatorGroups.filter((g) => g !== groupName),
-          removedGroups: [...prevState.removedGroups, groupName],
-        };
-      });
-    });
-
-    // this.socket.on('error', ...): Lắng nghe thông báo lỗi từ server.
-    // - Dữ liệu nhận được: message (chuỗi thông báo lỗi).
-    // - Cập nhật state notification để hiển thị lỗi trên giao diện.
-    // - Tự động xóa thông báo sau 3 giây (3000ms).
     this.socket.on('error', (message) => {
-      this.setState({ notification: message }, () => {
-        setTimeout(() => this.setState({ notification: '' }), 3000);
-      });
+      this.showNotification(message);
     });
-  }
-
-  componentWillUnmount() {
-    this.socket.disconnect();
-  }
+  };
 
   scrollToBottom = () => {
     const messagesDiv = this.messagesEndRef.current;
@@ -305,82 +230,102 @@ class Chat extends Component {
     }
   };
 
-  // handleSendMessage: Xử lý việc gửi tin nhắn (riêng tư hoặc nhóm) khi người dùng nhấn nút "Gửi".
-  // - Ngăn sự kiện mặc định của form (e.preventDefault).
-  // - Kiểm tra tin nhắn không rỗng và đã chọn recipient (người nhận hoặc nhóm).
-  // - Nếu là nhóm (selectedType === 'group'), gửi sự kiện 'group-message' đến server.
-  // - Nếu là riêng tư (selectedType === 'private'), gửi sự kiện 'private-message' đến server.
-  // - Sau khi gửi, xóa nội dung ô input (message).
+  fetchUsers = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/users', {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+      });
+      this.setState({ users: response.data });
+    } catch (err) {
+      this.showNotification('Không thể tải danh sách người dùng: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  fetchGroups = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/groups', {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+      });
+      const groups = response.data;
+      const creatorGroups = groups
+        .filter((group) => group.creator === this.props.userId)
+        .map((group) => group.groupId);
+      this.setState({ groups, creatorGroups });
+    } catch (err) {
+      this.showNotification('Không thể tải danh sách nhóm: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  fetchFriends = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/friends', {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+      });
+      this.setState({ friends: response.data });
+    } catch (err) {
+      this.showNotification('Không thể tải danh sách bạn bè: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  fetchFriendRequests = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/friend-requests', {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+      });
+      this.setState({ friendRequests: response.data });
+    } catch (err) {
+      this.showNotification('Không thể tải danh sách lời mời kết bạn: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  fetchGroupInvites = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/group-invites', {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+      });
+      this.setState({ groupInvites: response.data });
+    } catch (err) {
+      this.showNotification('Không thể tải danh sách lời mời tham gia nhóm: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   handleSendMessage = (e) => {
     e.preventDefault();
     const { message, selectedRecipient, selectedType } = this.state;
     if (message.trim() && selectedRecipient) {
       if (selectedType === 'group') {
-        // this.socket.emit('group-message', ...): Gửi tin nhắn nhóm đến server.
-        // - Dữ liệu gửi đi: { group, message } (tên nhóm và nội dung tin nhắn).
-        // - Server sẽ phát tán tin nhắn này đến tất cả thành viên trong nhóm.
-        this.socket.emit('group-message', { group: selectedRecipient, message });
+        this.socket.emit('group-message', { groupId: selectedRecipient, message });
       } else if (selectedType === 'private') {
-        // this.socket.emit('private-message', ...): Gửi tin nhắn riêng tư đến server.
-        // - Dữ liệu gửi đi: { to, message } (người nhận và nội dung tin nhắn).
-        // - Server sẽ chuyển tiếp tin nhắn đến người nhận tương ứng.
         this.socket.emit('private-message', { to: selectedRecipient, message });
       }
       this.setState({ message: '' });
     }
   };
 
-  // handleKeyPress: Xử lý sự kiện nhấn phím trong ô nhập tin nhắn.
-  // - Nếu phím nhấn là Enter, gọi hàm handleSendMessage để gửi tin nhắn.
   handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       this.handleSendMessage(e);
     }
   };
 
-  // handleSearchInputChange: Xử lý thay đổi giá trị trong ô tìm kiếm liên hệ mới.
-  // - Lấy giá trị nhập vào (query) và cập nhật state searchInput.
-  // - Nếu query không rỗng, tìm kiếm người dùng dựa trên tên (username) hoặc số điện thoại (phoneNumber).
-  // - Nếu query là số và đủ 10 chữ số, tìm kiếm bằng số điện thoại.
-  // - Nếu query không phải số, tìm kiếm bằng tên (không phân biệt hoa thường).
-  // - Cập nhật danh sách gợi ý (searchSuggestions) dựa trên kết quả tìm kiếm.
-  // - Nếu query rỗng, xóa danh sách gợi ý.
-  handleSearchInputChange = (e) => {
+  handleSearchInputChange = async (e) => {
     const query = e.target.value;
-    const { users } = this.state;
     this.setState({ searchInput: query });
 
     if (query.trim()) {
-      let suggestions = [];
-      const isPhoneNumberQuery = /^\d+$/.test(query);
-      
-      if (isPhoneNumberQuery) {
-        if (query.length === 10) {
-          suggestions = users.filter(
-            (user) =>
-              user.phoneNumber === query &&
-              user.username !== this.props.username
-          );
-        }
-      } else {
-        suggestions = users.filter(
-          (user) =>
-            user.username.toLowerCase().includes(query.toLowerCase()) &&
-            user.username !== this.props.username
-        );
+      try {
+        const response = await axios.get(`http://localhost:5001/users/search?query=${query}`, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+        });
+        this.setState({ searchSuggestions: response.data });
+      } catch (err) {
+        this.showNotification('Không thể tìm kiếm người dùng: ' + (err.response?.data?.error || err.message));
       }
-
-      this.setState({ searchSuggestions: suggestions });
     } else {
       this.setState({ searchSuggestions: [] });
     }
   };
 
-  // handleGroupSearchInputChange: Xử lý thay đổi giá trị trong ô tìm kiếm bạn bè để mời vào nhóm.
-  // - Lấy giá trị nhập vào (query) và cập nhật state groupSearchInput.
-  // - Nếu query không rỗng, tìm kiếm trong danh sách bạn bè (friends) dựa trên tên hoặc số điện thoại.
-  // - Cập nhật danh sách gợi ý (groupSearchSuggestions) dựa trên kết quả tìm kiếm.
-  // - Nếu query rỗng, xóa danh sách gợi ý.
   handleGroupSearchInputChange = (e) => {
     const query = e.target.value;
     const { friends, users } = this.state;
@@ -391,6 +336,7 @@ class Chat extends Component {
       const suggestions = friendDetails.filter(
         (friend) =>
           friend.username.toLowerCase().includes(query.toLowerCase()) ||
+          friend.fullName.toLowerCase().includes(query.toLowerCase()) ||
           friend.phoneNumber.includes(query)
       );
       this.setState({ groupSearchSuggestions: suggestions });
@@ -399,149 +345,192 @@ class Chat extends Component {
     }
   };
 
-  // handleSendFriendRequest: Xử lý việc gửi lời mời kết bạn.
-  // - Gửi sự kiện 'send-friend-request' đến server với tên người dùng (username) của người nhận.
-  // - Xóa nội dung ô tìm kiếm (searchInput) và danh sách gợi ý (searchSuggestions) sau khi gửi.
-  handleSendFriendRequest = (username) => {
-    // this.socket.emit('send-friend-request', ...): Gửi lời mời kết bạn đến server.
-    // - Dữ liệu gửi đi: username (tên người dùng của người nhận lời mời).
-    // - Server sẽ kiểm tra và gửi lời mời đến người nhận nếu hợp lệ.
-    this.socket.emit('send-friend-request', username);
-    this.setState({ searchInput: '', searchSuggestions: [] });
-  };
-
-  // handleAcceptFriendRequest: Xử lý việc chấp nhận lời mời kết bạn.
-  // - Gửi sự kiện 'accept-friend-request' đến server với tên người dùng (from) của người gửi lời mời.
-  // - Xóa lời mời khỏi danh sách friendRequests sau khi chấp nhận.
-  handleAcceptFriendRequest = (from) => {
-    // this.socket.emit('accept-friend-request', ...): Chấp nhận lời mời kết bạn và thông báo đến server.
-    // - Dữ liệu gửi đi: from (tên người dùng của người gửi lời mời).
-    // - Server sẽ cập nhật danh sách bạn bè cho cả hai người dùng và gửi sự kiện 'friend-added'.
-    this.socket.emit('accept-friend-request', from);
-    this.setState((prevState) => ({
-      friendRequests: prevState.friendRequests.filter((req) => req !== from),
-    }));
-  };
-
-  // handleRejectFriendRequest: Xử lý việc từ chối lời mời kết bạn.
-  // - Gửi sự kiện 'reject-friend-request' đến server với tên người dùng (from) của người gửi lời mời.
-  // - Xóa lời mời khỏi danh sách friendRequests sau khi từ chối.
-  handleRejectFriendRequest = (from) => {
-    // this.socket.emit('reject-friend-request', ...): Từ chối lời mời kết bạn và thông báo đến server.
-    // - Dữ liệu gửi đi: from (tên người dùng của người gửi lời mời).
-    // - Server sẽ xóa lời mời và gửi sự kiện 'friend-request-rejected' đến người gửi.
-    this.socket.emit('reject-friend-request', from);
-    this.setState((prevState) => ({
-      friendRequests: prevState.friendRequests.filter((req) => req !== from),
-    }));
-  };
-
-  // handleInviteToGroup: Xử lý việc mời một người bạn vào nhóm.
-  // - Gửi sự kiện 'invite-to-group' đến server với tên người dùng (username) và tên nhóm (groupName).
-  // - Xóa nội dung ô tìm kiếm (groupSearchInput) và danh sách gợi ý (groupSearchSuggestions) sau khi gửi.
-  handleInviteToGroup = (username, groupName) => {
-    // this.socket.emit('invite-to-group', ...): Gửi lời mời tham gia nhóm đến server.
-    // - Dữ liệu gửi đi: { groupName, username } (tên nhóm và tên người dùng được mời).
-    // - Server sẽ gửi lời mời đến người dùng tương ứng nếu hợp lệ.
-    this.socket.emit('invite-to-group', { groupName, username });
-    this.setState({ groupSearchInput: '', groupSearchSuggestions: [] });
-  };
-
-  // handleAcceptGroupInvite: Xử lý việc chấp nhận lời mời tham gia nhóm.
-  // - Gửi sự kiện 'accept-group-invite' đến server với tên nhóm (groupName).
-  // - Xóa lời mời khỏi danh sách groupInvites sau khi chấp nhận.
-  handleAcceptGroupInvite = (groupName) => {
-    // this.socket.emit('accept-group-invite', ...): Chấp nhận lời mời tham gia nhóm và thông báo đến server.
-    // - Dữ liệu gửi đi: groupName (tên nhóm được mời tham gia).
-    // - Server sẽ thêm người dùng vào nhóm và gửi sự kiện 'group-joined'.
-    this.socket.emit('accept-group-invite', groupName);
-    this.setState((prevState) => ({
-      groupInvites: prevState.groupInvites.filter((invite) => invite.groupName !== groupName),
-    }));
-  };
-
-  // handleRejectGroupInvite: Xử lý việc từ chối lời mời tham gia nhóm.
-  // - Gửi sự kiện 'reject-group-invite' đến server với tên nhóm (groupName).
-  // - Không cần cập nhật state vì server sẽ tự động xóa lời mời và gửi sự kiện 'group-invite-rejected'.
-  handleRejectGroupInvite = (groupName) => {
-    // this.socket.emit('reject-group-invite', ...): Từ chối lời mời tham gia nhóm và thông báo đến server.
-    // - Dữ liệu gửi đi: groupName (tên nhóm bị từ chối).
-    // - Server sẽ xóa lời mời và gửi sự kiện 'group-invite-rejected' đến người mời.
-    this.socket.emit('reject-group-invite', groupName);
-  };
-
-  // handleCreateGroup: Xử lý việc tạo nhóm mới.
-  // - Kiểm tra tên nhóm (groupNameInput) không rỗng.
-  // - Gửi sự kiện 'create-group' đến server với tên nhóm.
-  handleCreateGroup = () => {
-    const { groupNameInput } = this.state;
-    if (groupNameInput.trim()) {
-      // this.socket.emit('create-group', ...): Yêu cầu tạo nhóm mới và gửi đến server.
-      // - Dữ liệu gửi đi: groupNameInput (tên nhóm mới).
-      // - Server sẽ tạo nhóm và gửi sự kiện 'group-created' nếu thành công.
-      this.socket.emit('create-group', groupNameInput);
+  handleSendFriendRequest = async (username) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/friend-request',
+        { toUsername: username },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      this.setState({ searchInput: '', searchSuggestions: [] });
+    } catch (err) {
+      this.showNotification(err.response?.data?.error || 'Không thể gửi lời mời kết bạn');
     }
   };
 
-  // handleJoinGroup: Xử lý việc tham gia một nhóm.
-  // - Gửi sự kiện 'join-group' đến server với tên nhóm (groupName).
-  // - Cập nhật state để chọn nhóm vừa tham gia (selectedRecipient, selectedType) và ẩn form mời thành viên.
-  handleJoinGroup = (groupName) => {
-    // this.socket.emit('join-group', ...): Yêu cầu tham gia nhóm và gửi đến server.
-    // - Dữ liệu gửi đi: groupName (tên nhóm muốn tham gia).
-    // - Server sẽ thêm người dùng vào nhóm và gửi sự kiện 'group-joined'.
-    this.socket.emit('join-group', groupName);
+  handleAcceptFriendRequest = async (from) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/friend-request/accept',
+        { fromUsername: from },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      this.setState((prevState) => ({
+        friendRequests: prevState.friendRequests.filter((req) => req !== from),
+        friends: [...prevState.friends, from],
+      }));
+      this.socket.emit('request-user-status', { username: this.props.username, friend: from });
+    } catch (err) {
+      this.showNotification('Không thể chấp nhận lời mời: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  handleRejectFriendRequest = async (from) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/friend-request/reject',
+        { fromUsername: from },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      this.setState((prevState) => ({
+        friendRequests: prevState.friendRequests.filter((req) => req !== from),
+      }));
+    } catch (err) {
+      this.showNotification('Không thể từ chối lời mời: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  handleInviteToGroup = async (username, groupId) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/groups/invite',
+        { groupId, username },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      const recipient = this.state.users.find(user => user.username === username);
+      const recipientName = recipient ? recipient.fullName : username;
+      this.setState({ groupSearchInput: '', groupSearchSuggestions: [] });
+      this.showNotification(`Đã gửi lời mời vào nhóm cho ${recipientName}`);
+    } catch (err) {
+      this.showNotification(err.response?.data?.error || 'Không thể gửi lời mời vào nhóm');
+    }
+  };
+
+  handleAcceptGroupInvite = async (groupId, groupName) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/groups/invite/accept',
+        { groupId },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      this.setState((prevState) => ({
+        groupInvites: prevState.groupInvites.filter((invite) => invite.groupId !== groupId),
+      }));
+
+      await this.fetchGroups();
+      this.handleJoinGroup(groupId, groupName);
+      this.showNotification(`Đã tham gia nhóm ${groupName} thành công`);
+    } catch (err) {
+      this.showNotification('Không thể chấp nhận lời mời: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  handleRejectGroupInvite = async (groupId) => {
+    try {
+      await axios.post(
+        'http://localhost:5001/groups/invite/reject',
+        { groupId },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      this.setState((prevState) => ({
+        groupInvites: prevState.groupInvites.filter((invite) => invite.groupId !== groupId),
+      }));
+    } catch (err) {
+      this.showNotification('Không thể từ chối lời mời: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  handleCreateGroup = async () => {
+    const { groupNameInput } = this.state;
+    if (groupNameInput.trim()) {
+      try {
+        const response = await axios.post(
+          'http://localhost:5001/groups',
+          { groupName: groupNameInput },
+          { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+        );
+        const { groupId, groupName } = response.data;
+        this.setState({ groupNameInput: '', showGroupInput: false });
+
+        await this.fetchGroups();
+        this.handleJoinGroup(groupId, groupName);
+        this.showNotification(`Đã tạo nhóm ${groupName} thành công`);
+      } catch (err) {
+        this.showNotification(err.response?.data?.error || 'Không thể tạo nhóm');
+      }
+    }
+  };
+
+  handleJoinGroup = async (groupId, groupName) => {
     this.setState({
-      selectedRecipient: groupName,
+      selectedRecipient: groupId,
       selectedType: 'group',
       showGroupInviteForm: false,
     });
+
+    this.socket.emit('join-group', { groupId, groupName, username: this.props.username });
+
+    try {
+      await axios.post(
+        'http://localhost:5001/groups/join',
+        { groupId },
+        { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+    } catch (err) {
+      if (err.response?.data?.error !== 'Bạn đã ở trong nhóm') {
+        this.showNotification(err.response?.data?.error || 'Không thể tham gia nhóm');
+      }
+    }
   };
 
-  // handleLeaveGroup: Xử lý việc yêu cầu rời nhóm.
-  // - Cập nhật state confirmAction để hiển thị dialog xác nhận rời nhóm.
-  // - confirmAction sẽ lưu loại hành động ('leave') và tên nhóm (groupName).
   handleLeaveGroup = () => {
     this.setState((prevState) => ({
-      confirmAction: { type: 'leave', groupName: prevState.selectedRecipient },
+      confirmAction: { type: 'leave', groupId: prevState.selectedRecipient },
     }));
   };
 
-  // handleDeleteGroup: Xử lý việc yêu cầu xóa nhóm.
-  // - Cập nhật state confirmAction để hiển thị dialog xác nhận xóa nhóm.
-  // - confirmAction sẽ lưu loại hành động ('delete') và tên nhóm (groupName).
   handleDeleteGroup = () => {
     this.setState((prevState) => ({
-      confirmAction: { type: 'delete', groupName: prevState.selectedRecipient },
+      confirmAction: { type: 'delete', groupId: prevState.selectedRecipient },
     }));
   };
 
-  // handleConfirmAction: Xử lý hành động xác nhận (rời nhóm hoặc xóa nhóm) từ dialog.
-  // - Nếu người dùng chọn "Đồng ý" (confirm = true) và có confirmAction:
-  //   - Nếu type là 'leave', gửi sự kiện 'leave-group' đến server.
-  //   - Nếu type là 'delete', gửi sự kiện 'delete-group' đến server.
-  // - Xóa confirmAction sau khi xử lý (ẩn dialog).
-  handleConfirmAction = (confirm) => {
+  handleLogoutClick = () => {
+    this.setState({ confirmAction: { type: 'logout' } });
+  };
+
+  handleConfirmAction = async (confirm) => {
     const { confirmAction } = this.state;
     if (confirm && confirmAction) {
-      if (confirmAction.type === 'leave') {
-        // this.socket.emit('leave-group', ...): Yêu cầu rời nhóm và gửi đến server.
-        // - Dữ liệu gửi đi: groupName (tên nhóm muốn rời).
-        // - Server sẽ xóa người dùng khỏi nhóm và gửi sự kiện 'group-left'.
-        this.socket.emit('leave-group', confirmAction.groupName);
-      } else if (confirmAction.type === 'delete') {
-        // this.socket.emit('delete-group', ...): Yêu cầu xóa nhóm và gửi đến server.
-        // - Dữ liệu gửi đi: groupName (tên nhóm muốn xóa).
-        // - Server sẽ xóa nhóm và gửi sự kiện 'group-deleted' đến tất cả thành viên.
-        this.socket.emit('delete-group', confirmAction.groupName);
+      try {
+        if (confirmAction.type === 'leave') {
+          await axios.post(
+            'http://localhost:5001/groups/leave',
+            { groupId: confirmAction.groupId },
+            { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+          );
+        } else if (confirmAction.type === 'delete') {
+          await axios.delete(
+            `http://localhost:5001/groups/${confirmAction.groupId}`,
+            { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+          );
+        } else if (confirmAction.type === 'logout') {
+          await axios.post(
+            'http://localhost:5001/logout',
+            {},
+            { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` } }
+          );
+          this.handleDisconnect();
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+        }
+      } catch (err) {
+        this.showNotification(err.response?.data?.error || 'Hành động thất bại');
       }
     }
     this.setState({ confirmAction: null });
   };
 
-  // toggleGroupInviteForm: Xử lý việc hiển thị/ẩn form mời bạn bè vào nhóm.
-  // - Đảo ngược trạng thái showGroupInviteForm (true -> false hoặc false -> true).
-  // - Khi hiển thị form, xóa nội dung ô tìm kiếm (groupSearchInput) và danh sách gợi ý (groupSearchSuggestions).
   toggleGroupInviteForm = () => {
     this.setState((prevState) => ({
       showGroupInviteForm: !prevState.showGroupInviteForm,
@@ -550,8 +539,6 @@ class Chat extends Component {
     }));
   };
 
-  // toggleGroupInput: Xử lý việc hiển thị/ẩn input tạo nhóm mới.
-  // - Đảo ngược trạng thái showGroupInput (true -> false hoặc false -> true).
   toggleGroupInput = () => {
     this.setState((prevState) => ({
       showGroupInput: !prevState.showGroupInput,
@@ -585,12 +572,18 @@ class Chat extends Component {
 
     return (
       <div className="chat-container">
+        <button className="logout-button" onClick={this.handleLogoutClick}>
+          Đăng xuất
+        </button>
         {notification && <div className="notification">{notification}</div>}
         {confirmAction && (
           <div className="confirm-dialog">
             <p>
-              Bạn có chắc chắn muốn {confirmAction.type === 'leave' ? 'rời nhóm' : 'xóa nhóm'} "
-              {confirmAction.groupName}"?
+              {confirmAction.type === 'logout'
+                ? 'Bạn có chắc chắn muốn đăng xuất?'
+                : `Bạn có chắc chắn muốn ${confirmAction.type === 'leave' ? 'rời nhóm' : 'xóa nhóm'} "${
+                    groups.find(group => group.groupId === confirmAction.groupId)?.groupName || 'Nhóm'
+                  }"`}
             </p>
             <button className="confirm-button" onClick={() => this.handleConfirmAction(true)}>
               Đồng ý
@@ -602,6 +595,7 @@ class Chat extends Component {
         )}
         <div className="sidebar">
           <h2 className="sidebar-header">TRÒ CHUYỆN</h2>
+          <p className="user-fullname">{this.props.fullName}</p>
           <div className="search-section">
             <h4>Tìm Kiếm Liên Hệ Mới</h4>
             <input
@@ -615,7 +609,7 @@ class Chat extends Component {
             <ul className="suggestions-list">
               {searchSuggestions.map((user, index) => (
                 <li key={index}>
-                  {user.username}
+                  {user.fullName} {/* Xóa phần hiển thị username */}
                   {friends.includes(user.username) ? (
                     <span className="friend-label">Bạn bè</span>
                   ) : (
@@ -649,47 +643,53 @@ class Chat extends Component {
           )}
           <h3>Lời mời kết bạn</h3>
           <ul>
-            {friendRequests.map((from, index) => (
-              <li key={index}>
-                {from}
-                <button
-                  className="accept-button"
-                  onClick={() => this.handleAcceptFriendRequest(from)}
-                  title="Chấp nhận"
-                >
-                  ✔
-                </button>
-                <button
-                  className="reject-button"
-                  onClick={() => this.handleRejectFriendRequest(from)}
-                  title="Từ chối"
-                >
-                  ✘
-                </button>
-              </li>
-            ))}
+            {friendRequests.map((from, index) => {
+              const requester = users.find(user => user.username === from);
+              return (
+                <li key={index}>
+                  {requester ? requester.fullName : from}
+                  <button
+                    className="accept-button"
+                    onClick={() => this.handleAcceptFriendRequest(from)}
+                    title="Chấp nhận"
+                  >
+                    ✔
+                  </button>
+                  <button
+                    className="reject-button"
+                    onClick={() => this.handleRejectFriendRequest(from)}
+                    title="Từ chối"
+                  >
+                    ✘
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           <h3>Lời mời tham gia nhóm</h3>
           <ul>
-            {groupInvites.map((invite, index) => (
-              <li key={index}>
-                {invite.from} mời bạn vào {invite.groupName}
-                <button
-                  className="accept-button"
-                  onClick={() => this.handleAcceptGroupInvite(invite.groupName)}
-                  title="Chấp nhận"
-                >
-                  ✔
-                </button>
-                <button
-                  className="reject-button"
-                  onClick={() => this.handleRejectGroupInvite(invite.groupName)}
-                  title="Từ chối"
-                >
-                  ✘
-                </button>
-              </li>
-            ))}
+            {groupInvites.map((invite, index) => {
+              const inviter = users.find(user => user.username === invite.from);
+              return (
+                <li key={index}>
+                  {inviter ? inviter.fullName : invite.from} mời bạn vào {invite.groupName}
+                  <button
+                    className="accept-button"
+                    onClick={() => this.handleAcceptGroupInvite(invite.groupId, invite.groupName)}
+                    title="Chấp nhận"
+                  >
+                    ✔
+                  </button>
+                  <button
+                    className="reject-button"
+                    onClick={() => this.handleRejectGroupInvite(invite.groupId)}
+                    title="Từ chối"
+                  >
+                    ✘
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           <h3>Bạn bè</h3>
           <ul>
@@ -713,7 +713,7 @@ class Chat extends Component {
                     className="status-dot"
                     style={{ backgroundColor: user.online ? '#4CAF50' : '#B0BEC5' }}
                   ></span>
-                  {user.username}
+                  {user.fullName}
                 </li>
               ))}
           </ul>
@@ -722,11 +722,11 @@ class Chat extends Component {
             <ul>
               {groups.map((group) => (
                 <li
-                  key={group.name}
-                  className={selectedRecipient === group.name && selectedType === 'group' ? 'active' : ''}
-                  onClick={() => this.handleJoinGroup(group.name)}
+                  key={group.groupId}
+                  className={selectedRecipient === group.groupId && selectedType === 'group' ? 'active' : ''}
+                  onClick={() => this.handleJoinGroup(group.groupId, group.groupName)}
                 >
-                  {group.name}
+                  {group.groupName}
                 </li>
               ))}
             </ul>
@@ -736,8 +736,8 @@ class Chat extends Component {
           <h3>
             {selectedRecipient
               ? selectedType === 'group'
-                ? `Nhóm: ${selectedRecipient}`
-                : selectedRecipient
+                ? `Nhóm: ${groups.find(group => group.groupId === selectedRecipient)?.groupName || ''}`
+                : users.find(user => user.username === selectedRecipient)?.fullName || selectedRecipient
               : 'Chọn bạn hoặc nhóm để chat'}
           </h3>
           {selectedRecipient && selectedType === 'group' && (
@@ -768,7 +768,7 @@ class Chat extends Component {
                 <ul className="suggestions-list">
                   {groupSearchSuggestions.map((friend, index) => (
                     <li key={index}>
-                      {friend.username} ({friend.phoneNumber})
+                      {friend.fullName} - {friend.phoneNumber} {/* Đổi format thành "fullName - phonenumber" */}
                       <button
                         onClick={() => this.handleInviteToGroup(friend.username, selectedRecipient)}
                       >
@@ -784,15 +784,25 @@ class Chat extends Component {
             </div>
           )}
           <div className="messages" ref={this.messagesEndRef}>
-            {(messages[selectedRecipient] || []).map((msg, index) => (
-              <div
-                key={index}
-                className={`message ${msg.from === this.props.username ? 'sent' : 'received'}`}
-              >
-                {selectedType === 'group' && <strong>{msg.from}: </strong>}
-                {msg.message}
-              </div>
-            ))}
+            {(messages[selectedRecipient] || []).map((msg, index) => {
+              const sender = users.find(user => user.username === msg.from);
+              if (msg.type === 'system') {
+                return (
+                  <div key={index} className="message-system">
+                    {msg.message}
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={index}
+                  className={`message ${msg.from === this.props.username ? 'sent' : 'received'}`}
+                >
+                  {selectedType === 'group' && <strong>{sender ? sender.fullName : msg.from}: </strong>}
+                  {msg.message}
+                </div>
+              );
+            })}
           </div>
           <div className="message-input">
             <input
