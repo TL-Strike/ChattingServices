@@ -14,6 +14,8 @@ const JWT_SECRET = 'your_jwt_secret_key';
 
 const users = new Map();
 const groups = new Map();
+const privateMessages = new Map();
+const groupMessages = new Map();
 
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
@@ -63,6 +65,30 @@ chatNamespace.on('connection', (socket) => {
     });
   });
 
+  socket.on('request-message-history', ({ username }) => {
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    // Gửi tin nhắn cá nhân
+    const privateMessageHistory = [];
+    privateMessages.forEach((messages, key) => {
+      const [from, to] = key.split(':');
+      if (from === username || to === username) {
+        privateMessageHistory.push(...messages.map(msg => ({ ...msg, from, to })));
+      }
+    });
+    socket.emit('private-message-history', privateMessageHistory);
+
+    // Gửi tin nhắn nhóm
+    const userGroups = Array.from(groups.values()).filter(group => group.members.includes(username));
+    const groupMessageHistory = [];
+    userGroups.forEach(group => {
+      const messages = groupMessages.get(group.groupId) || [];
+      groupMessageHistory.push(...messages.map(msg => ({ ...msg, groupId: group.groupId })));
+    });
+    socket.emit('group-message-history', groupMessageHistory);
+  });
+
   socket.on('private-message', ({ to, message, file }) => {
     const fromUser = users.get(socket.id);
     if (!fromUser) return;
@@ -73,19 +99,19 @@ chatNamespace.on('connection', (socket) => {
       return;
     }
 
-    toUser.socket.emit('private-message', {
-      from: fromUser.username,
-      message,
-      file,
-      to: toUser.username,
-    });
+    const messageData = { from: fromUser.username, message, file, to: toUser.username };
+    const messageKey = `${fromUser.username}:${toUser.username}`;
+    const reverseKey = `${toUser.username}:${fromUser.username}`;
 
-    socket.emit('private-message', {
-      from: fromUser.username,
-      message,
-      file,
-      to: toUser.username,
-    });
+    let messageArray = privateMessages.get(messageKey) || privateMessages.get(reverseKey);
+    if (!messageArray) {
+      messageArray = [];
+      privateMessages.set(messageKey, messageArray);
+    }
+    messageArray.push(messageData);
+
+    toUser.socket.emit('private-message', messageData);
+    socket.emit('private-message', messageData);
   });
 
   socket.on('group-message', ({ groupId, message, file }) => {
@@ -97,12 +123,14 @@ chatNamespace.on('connection', (socket) => {
       return;
     }
 
-    chatNamespace.to(groupId).emit('group-message', {
-      from: fromUser.username,
-      message,
-      file,
-      groupId,
-    });
+    const messageData = { from: fromUser.username, message, file, groupId };
+    
+    if (!groupMessages.has(groupId)) {
+      groupMessages.set(groupId, []);
+    }
+    groupMessages.get(groupId).push(messageData);
+
+    chatNamespace.to(groupId).emit('group-message', messageData);
   });
 
   socket.on('request-user-status', ({ username, friend }) => {
@@ -127,6 +155,10 @@ chatNamespace.on('connection', (socket) => {
     }
     socket.join(groupId);
     console.log(`User ${username} joined group ${groupId}`);
+
+    // Gửi lịch sử tin nhắn nhóm cho người dùng mới
+    const messages = groupMessages.get(groupId) || [];
+    socket.emit('group-message-history', messages.map(msg => ({ ...msg, groupId })));
   });
 
   socket.on('disconnect', () => {
@@ -202,11 +234,23 @@ apiNamespace.on('connection', (socket) => {
   });
 
   socket.on('group-member-update', ({ groupId, fullName, action }) => {
+    const message = action === 'joined' 
+      ? `${fullName} đã tham gia nhóm` 
+      : `${fullName} đã rời nhóm`;
+
+    // Lưu tin nhắn hệ thống vào groupMessages
+    if (!groupMessages.has(groupId)) {
+      groupMessages.set(groupId, []);
+    }
+    groupMessages.get(groupId).push({ message, type: 'system', groupId });
+
+    // Gửi tin nhắn hệ thống tới tất cả thành viên trong nhóm
     chatNamespace.to(groupId).emit('group-member-update', { groupId, fullName, action });
   });
 
   socket.on('group-deleted', ({ groupId }) => {
     groups.delete(groupId);
+    groupMessages.delete(groupId);
     chatNamespace.to(groupId).emit('group-deleted', { groupId });
   });
 });
